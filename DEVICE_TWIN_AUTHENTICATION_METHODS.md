@@ -491,6 +491,288 @@ MOCKABLE_FUNCTION(, IOTHUB_MESSAGING_RESULT, IoTHubMessaging_LL_SetTrustedCert,
 
 ---
 
+## Two Different SDKs in This Repository
+
+### CRITICAL: There are TWO SDKs in azure-iot-sdk-c
+
+This repository contains **TWO SEPARATE SDKs** for different purposes:
+
+#### 1. Device Client SDK (`/iothub_client/`)
+
+**Purpose:** For **IoT devices** connecting to IoT Hub
+
+**Runs On:** 
+- IoT devices (Raspberry Pi, ESP32, embedded devices, etc.)
+- Edge devices
+- Gateways
+
+**Authentication Supported:**
+- ✅ SAS tokens (Shared Access Signature)
+- ✅ **X.509 Certificates** ← YOUR DEVICES USE THIS
+- ✅ Symmetric Keys
+
+**What it does:**
+- Sends telemetry from device to cloud
+- Receives cloud-to-device messages
+- Receives desired property updates from Device Twin
+- **Reports** device state via reported properties
+- Responds to direct methods
+
+**Example Connection String:**
+```c
+// X.509 certificate authentication for devices
+"HostName=myHub.azure-devices.net;DeviceId=myDevice;x509=true"
+```
+
+**Key Files:**
+- `/iothub_client/inc/iothub_device_client.h`
+- `/iothub_client/inc/iothub_client_core_common.h`
+- Sample: `/iothub_client/samples/iothub_ll_client_x509_sample/`
+
+**Setting X.509 Certificate (Device SDK):**
+```c
+IOTHUB_DEVICE_CLIENT_LL_HANDLE device = 
+    IoTHubDeviceClient_LL_CreateFromConnectionString(connectionString, protocol);
+
+// Set X.509 certificate and private key
+IoTHubDeviceClient_LL_SetOption(device, OPTION_X509_CERT, x509certificate);
+IoTHubDeviceClient_LL_SetOption(device, OPTION_X509_PRIVATE_KEY, x509privatekey);
+```
+
+---
+
+#### 2. Service Client SDK (`/iothub_service_client/`)
+
+**Purpose:** For **backend applications** managing IoT Hub
+
+**Runs On:**
+- Cloud servers
+- Backend services
+- Admin tools
+- Management applications
+
+**Authentication Supported:**
+- ✅ SAS tokens (Shared Access Signature)
+- ✅ Shared Access Keys
+- ❌ **X.509 Certificates NOT supported**
+
+**What it does:**
+- **Reads** Device Twin (full or partial) ← THIS IS WHAT WE UPDATED
+- **Updates** desired properties in Device Twin
+- Sends cloud-to-device messages
+- Invokes direct methods on devices
+- Manages device registry
+
+**Example Connection String:**
+```c
+// Service client ONLY uses SAS authentication
+"HostName=myHub.azure-devices.net;SharedAccessKeyName=iothubowner;SharedAccessKey=abc123=="
+```
+
+**Key Files:**
+- `/iothub_service_client/inc/iothub_devicetwin.h` ← This is what we updated
+- `/iothub_service_client/inc/iothub_service_client_auth.h`
+- Sample: `/iothub_service_client/samples/iothub_devicetwin_sample/`
+
+---
+
+### Why Your Devices Use Certificates (and That's OK)
+
+**Question:** "But my IoT devices use only cert auth, how?"
+
+**Answer:** Your devices use the **Device Client SDK** (`/iothub_client/`), NOT the **Service Client SDK** (`/iothub_service_client/`).
+
+**Architecture:**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Azure IoT Hub (Cloud)                    │
+└────────────────────┬───────────────────┬────────────────────┘
+                     │                   │
+         ┌───────────▼──────────┐   ┌────▼─────────────────┐
+         │   Device → Cloud     │   │   Backend → Cloud    │
+         │   (Device Client)    │   │   (Service Client)   │
+         └───────────┬──────────┘   └────┬─────────────────┘
+                     │                   │
+         ┌───────────▼──────────┐   ┌────▼─────────────────┐
+         │  YOUR IoT DEVICES    │   │  YOUR BACKEND APP    │
+         │  (/iothub_client/)   │   │ (/iothub_service_    │
+         │                      │   │      client/)        │
+         │  ✅ X.509 certs      │   │  ✅ SAS tokens only  │
+         │  ✅ SAS tokens       │   │  ❌ NO X.509         │
+         │  ✅ Symmetric keys   │   │                      │
+         │                      │   │                      │
+         │  - Send telemetry    │   │  - Read twin         │
+         │  - Report state      │   │  - Update desired    │
+         │  - Receive desired   │   │  - Manage devices    │
+         └──────────────────────┘   └──────────────────────┘
+```
+
+**Your Setup:**
+- **Devices**: Use `/iothub_client/` with X.509 certificates ✅
+- **Backend**: Uses `/iothub_service_client/` with SAS tokens ✅
+- **Device Twin Operations**:
+  - Devices read desired properties (using Device Client SDK with X.509)
+  - Backend updates desired properties (using Service Client SDK with SAS)
+  - Backend reads full/partial twin (using Service Client SDK with SAS) ← OUR UPDATE
+
+---
+
+### The Update We Made
+
+We updated **ONLY** the Service Client SDK (`/iothub_service_client/`):
+- Added partial twin retrieval capability
+- Backend can now download only desired or reported properties
+- **Authentication unchanged**: Still uses SAS tokens only
+
+We did **NOT** change anything in the Device Client SDK (`/iothub_client/`):
+- Your devices continue using X.509 certificates
+- No impact on device authentication
+- Devices still send/receive twin updates normally
+
+---
+
+## Two Different SDKs in This Repository
+
+### CRITICAL: There are TWO SDKs in azure-iot-sdk-c
+
+This repository contains **TWO SEPARATE SDKs** for different purposes:
+
+#### 1. Device Client SDK (`/iothub_client/`)
+
+**Purpose:** For **IoT devices** connecting to IoT Hub
+
+**Runs On:** 
+- IoT devices (Raspberry Pi, ESP32, embedded devices, etc.)
+- Edge devices
+- Gateways
+
+**Authentication Supported:**
+- ✅ SAS tokens (Shared Access Signature)
+- ✅ **X.509 Certificates** ← YOUR DEVICES USE THIS
+- ✅ Symmetric Keys
+
+**What it does:**
+- Sends telemetry from device to cloud
+- Receives cloud-to-device messages
+- Receives desired property updates from Device Twin
+- **Reports** device state via reported properties
+- Responds to direct methods
+
+**Example Connection String:**
+```c
+// X.509 certificate authentication for devices
+"HostName=myHub.azure-devices.net;DeviceId=myDevice;x509=true"
+```
+
+**Key Files:**
+- `/iothub_client/inc/iothub_device_client.h`
+- `/iothub_client/inc/iothub_client_core_common.h`
+- Sample: `/iothub_client/samples/iothub_ll_client_x509_sample/`
+
+**Setting X.509 Certificate (Device SDK):**
+```c
+IOTHUB_DEVICE_CLIENT_LL_HANDLE device = 
+    IoTHubDeviceClient_LL_CreateFromConnectionString(connectionString, protocol);
+
+// Set X.509 certificate and private key
+IoTHubDeviceClient_LL_SetOption(device, OPTION_X509_CERT, x509certificate);
+IoTHubDeviceClient_LL_SetOption(device, OPTION_X509_PRIVATE_KEY, x509privatekey);
+```
+
+---
+
+#### 2. Service Client SDK (`/iothub_service_client/`)
+
+**Purpose:** For **backend applications** managing IoT Hub
+
+**Runs On:**
+- Cloud servers
+- Backend services
+- Admin tools
+- Management applications
+
+**Authentication Supported:**
+- ✅ SAS tokens (Shared Access Signature)
+- ✅ Shared Access Keys
+- ❌ **X.509 Certificates NOT supported**
+
+**What it does:**
+- **Reads** Device Twin (full or partial) ← THIS IS WHAT WE UPDATED
+- **Updates** desired properties in Device Twin
+- Sends cloud-to-device messages
+- Invokes direct methods on devices
+- Manages device registry
+
+**Example Connection String:**
+```c
+// Service client ONLY uses SAS authentication
+"HostName=myHub.azure-devices.net;SharedAccessKeyName=iothubowner;SharedAccessKey=abc123=="
+```
+
+**Key Files:**
+- `/iothub_service_client/inc/iothub_devicetwin.h` ← This is what we updated
+- `/iothub_service_client/inc/iothub_service_client_auth.h`
+- Sample: `/iothub_service_client/samples/iothub_devicetwin_sample/`
+
+---
+
+### Why Your Devices Use Certificates (and That's OK)
+
+**Question:** "But my IoT devices use only cert auth, how?"
+
+**Answer:** Your devices use the **Device Client SDK** (`/iothub_client/`), NOT the **Service Client SDK** (`/iothub_service_client/`).
+
+**Architecture:**
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Azure IoT Hub (Cloud)                    │
+└────────────────────┬───────────────────┬────────────────────┘
+                     │                   │
+         ┌───────────▼──────────┐   ┌────▼─────────────────┐
+         │   Device → Cloud     │   │   Backend → Cloud    │
+         │   (Device Client)    │   │   (Service Client)   │
+         └───────────┬──────────┘   └────┬─────────────────┘
+                     │                   │
+         ┌───────────▼──────────┐   ┌────▼─────────────────┐
+         │  YOUR IoT DEVICES    │   │  YOUR BACKEND APP    │
+         │  (/iothub_client/)   │   │ (/iothub_service_    │
+         │                      │   │      client/)        │
+         │  ✅ X.509 certs      │   │  ✅ SAS tokens only  │
+         │  ✅ SAS tokens       │   │  ❌ NO X.509         │
+         │  ✅ Symmetric keys   │   │                      │
+         │                      │   │                      │
+         │  - Send telemetry    │   │  - Read twin         │
+         │  - Report state      │   │  - Update desired    │
+         │  - Receive desired   │   │  - Manage devices    │
+         └──────────────────────┘   └──────────────────────┘
+```
+
+**Your Setup:**
+- **Devices**: Use `/iothub_client/` with X.509 certificates ✅
+- **Backend**: Uses `/iothub_service_client/` with SAS tokens ✅
+- **Device Twin Operations**:
+  - Devices read desired properties (using Device Client SDK with X.509)
+  - Backend updates desired properties (using Service Client SDK with SAS)
+  - Backend reads full/partial twin (using Service Client SDK with SAS) ← OUR UPDATE
+
+---
+
+### The Update We Made
+
+We updated **ONLY** the Service Client SDK (`/iothub_service_client/`):
+- Added partial twin retrieval capability
+- Backend can now download only desired or reported properties
+- **Authentication unchanged**: Still uses SAS tokens only
+
+We did **NOT** change anything in the Device Client SDK (`/iothub_client/`):
+- Your devices continue using X.509 certificates
+- No impact on device authentication
+- Devices still send/receive twin updates normally
+
+---
+
 ## Conclusion
 
 ### Summary of Findings
